@@ -38,7 +38,7 @@ export function SectionHeading({ kicker, title, detail, action }) {
 
 export function DataTable({ columns, rows, rowKey }) {
   if (!rows?.length) return <EmptyState />
-  return <div className="table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={rowKey ? rowKey(row) : index}>{columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : (row[column.key] ?? '—')}</td>)}</tr>)}</tbody></table></div>
+  return <div className="table-wrap" role="region" aria-label="Case records table. Scroll horizontally to see all columns." tabIndex={0}><table><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={rowKey ? rowKey(row) : index}>{columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : (row[column.key] ?? '—')}</td>)}</tr>)}</tbody></table></div>
 }
 
 export function formatDate(value, options = {}) {
