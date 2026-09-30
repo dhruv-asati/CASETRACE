@@ -1,0 +1,43 @@
+# Environment files and local credentials
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+/secrets/
+**/secrets/
+
+# Dependencies and generated builds
+**/node_modules/
+**/target/
+**/dist/
+**/build/
+.pnpm-store/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.settings/
+*.iml
+*.class
+.project
+.classpath
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# Logs and temporary/runtime files
+*.log
+logs/
+*.pid
+*.tmp
+*.swp
+
+# Maven test output
+**/surefire-reports/
