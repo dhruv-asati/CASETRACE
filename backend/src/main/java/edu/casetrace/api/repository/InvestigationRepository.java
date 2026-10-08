@@ -37,7 +37,8 @@ public class InvestigationRepository {
     public List<EvidenceDto> findEvidence(long caseId) {
         String sql = """
                 SELECT e.evidence_id, e.evidence_code, e.evidence_type, e.description,
-                       l.name AS location, e.discovered_at, e.relevance,
+                       e.location_id, l.name AS location, l.address, e.discovered_at, e.relevance,
+                       (SELECT ep.person_id FROM evidence_person ep WHERE ep.case_id=e.case_id AND ep.evidence_id=e.evidence_id ORDER BY ep.person_id LIMIT 1) AS person_id,
                        (SELECT string_agg(p.full_name, ', ' ORDER BY p.full_name)
                         FROM evidence_person ep
                         JOIN person p ON p.person_id = ep.person_id
@@ -49,9 +50,9 @@ public class InvestigationRepository {
                 """;
         return jdbcTemplate.query(sql, (rs, rowNum) -> new EvidenceDto(
                 rs.getLong("evidence_id"), rs.getString("evidence_code"), rs.getString("evidence_type"),
-                rs.getString("description"), rs.getString("location"),
+                rs.getString("description"), rs.getObject("location_id", Long.class), rs.getString("location"), rs.getString("address"),
                 rs.getObject("discovered_at", java.time.OffsetDateTime.class), rs.getString("relevance"),
-                rs.getString("connected_people")), caseId);
+                rs.getObject("person_id", Long.class), rs.getString("connected_people")), caseId);
     }
 
     public List<TimelineEventDto> findTimeline(long caseId) {

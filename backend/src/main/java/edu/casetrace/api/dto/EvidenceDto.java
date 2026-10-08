@@ -7,8 +7,11 @@ public record EvidenceDto(
         String evidenceCode,
         String evidenceType,
         String description,
+        Long locationId,
         String location,
+        String address,
         OffsetDateTime discoveredAt,
         String relevance,
+        Long personId,
         String connectedPeople
 ) {}

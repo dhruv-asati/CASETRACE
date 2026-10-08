@@ -10,6 +10,7 @@ public record CctvRecordDto(
         String person,
         long locationId,
         String location,
+        String address,
         OffsetDateTime observedAt,
         String activity,
         BigDecimal confidence,

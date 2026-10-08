@@ -10,5 +10,9 @@ public record WitnessStatementDto(
         String subject,
         OffsetDateTime recordedAt,
         String associatedClaimLocation,
+        Long claimLocationId,
+        String claimAddress,
+        java.time.OffsetDateTime claimStart,
+        java.time.OffsetDateTime claimEnd,
         String statement
 ) {}

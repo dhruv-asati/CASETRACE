@@ -8,6 +8,7 @@ public record AccessLogDto(
         String person,
         long locationId,
         String location,
+        String address,
         OffsetDateTime occurredAt,
         String accessType,
         String credentialCode,

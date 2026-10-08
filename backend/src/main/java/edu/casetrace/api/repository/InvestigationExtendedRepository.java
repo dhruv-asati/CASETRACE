@@ -33,7 +33,7 @@ public class InvestigationExtendedRepository {
                                         OffsetDateTime startAt, OffsetDateTime endAt) {
         StringBuilder sql = new StringBuilder("""
                 SELECT o.observation_id, cam.camera_code, o.person_id, p.full_name AS person,
-                       cam.location_id, l.name AS location, o.observed_at, o.activity, o.confidence,
+                       cam.location_id, l.name AS location, l.address, o.observed_at, o.activity, o.confidence,
                        c.case_code, c.title AS case_title
                 FROM cctv_observation o
                 JOIN camera cam ON cam.case_id = o.case_id AND cam.camera_id = o.camera_id
@@ -54,7 +54,7 @@ public class InvestigationExtendedRepository {
                                              OffsetDateTime startAt, OffsetDateTime endAt) {
         StringBuilder sql = new StringBuilder("""
                 SELECT a.access_event_id, a.person_id, p.full_name AS person,
-                       a.location_id, l.name AS location, a.occurred_at, a.access_type,
+                       a.location_id, l.name AS location, l.address, a.occurred_at, a.access_type,
                        a.credential_code, c.case_code, c.title AS case_title
                 FROM access_event a
                 JOIN person p ON p.person_id = a.person_id
@@ -69,7 +69,7 @@ public class InvestigationExtendedRepository {
         sql.append(" ORDER BY a.occurred_at, a.access_event_id");
         return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> new AccessLogDto(
                 rs.getLong("access_event_id"), rs.getLong("person_id"), rs.getString("person"),
-                rs.getLong("location_id"), rs.getString("location"),
+                rs.getLong("location_id"), rs.getString("location"), rs.getString("address"),
                 rs.getObject("occurred_at", OffsetDateTime.class), rs.getString("access_type"),
                 rs.getString("credential_code"), rs.getString("case_code"), rs.getString("case_title")),
                 args.toArray());
@@ -116,6 +116,10 @@ public class InvestigationExtendedRepository {
                         FROM alibi_claim ac JOIN location l ON l.location_id = ac.claimed_location_id
                         WHERE ac.source_statement_id = ws.statement_id
                         ORDER BY ac.claim_id LIMIT 1) AS associated_claim_location,
+                       (SELECT ac.claimed_location_id FROM alibi_claim ac WHERE ac.source_statement_id=ws.statement_id ORDER BY ac.claim_id LIMIT 1) AS claim_location_id,
+                       (SELECT l.address FROM alibi_claim ac JOIN location l ON l.location_id=ac.claimed_location_id WHERE ac.source_statement_id=ws.statement_id ORDER BY ac.claim_id LIMIT 1) AS claim_address,
+                       (SELECT ac.claim_start FROM alibi_claim ac WHERE ac.source_statement_id=ws.statement_id ORDER BY ac.claim_id LIMIT 1) AS claim_start,
+                       (SELECT ac.claim_end FROM alibi_claim ac WHERE ac.source_statement_id=ws.statement_id ORDER BY ac.claim_id LIMIT 1) AS claim_end,
                        ws.statement
                 FROM witness_statement ws
                 JOIN person witness ON witness.person_id = ws.witness_id
@@ -127,7 +131,9 @@ public class InvestigationExtendedRepository {
                 rs.getLong("statement_id"), rs.getLong("witness_id"), rs.getString("witness"),
                 nullableLong(rs, "subject_id"), rs.getString("subject"),
                 rs.getObject("recorded_at", OffsetDateTime.class), rs.getString("associated_claim_location"),
-                rs.getString("statement")), caseId);
+                rs.getObject("claim_location_id", Long.class), rs.getString("claim_address"),
+                rs.getObject("claim_start", OffsetDateTime.class),
+                rs.getObject("claim_end", OffsetDateTime.class), rs.getString("statement")), caseId);
     }
 
     public List<VehicleDto> findVehicles(long caseId) {
@@ -147,7 +153,7 @@ public class InvestigationExtendedRepository {
                                                OffsetDateTime startAt, OffsetDateTime endAt) {
         StringBuilder sql = new StringBuilder("""
                 SELECT ve.vehicle_event_id, v.vehicle_id, v.registration_number, v.owner_id,
-                       owner.full_name AS owner, ve.location_id, l.name AS location,
+                       owner.full_name AS owner, ve.location_id, l.name AS location, l.address,
                        ve.occurred_at, ve.activity
                 FROM vehicle_event ve
                 JOIN vehicle v ON v.case_id = ve.case_id AND v.vehicle_id = ve.vehicle_id
@@ -163,7 +169,7 @@ public class InvestigationExtendedRepository {
         return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> new VehicleLogDto(
                 rs.getLong("vehicle_event_id"), rs.getLong("vehicle_id"), rs.getString("registration_number"),
                 rs.getLong("owner_id"), rs.getString("owner"), rs.getLong("location_id"),
-                rs.getString("location"), rs.getObject("occurred_at", OffsetDateTime.class),
+                rs.getString("location"), rs.getString("address"), rs.getObject("occurred_at", OffsetDateTime.class),
                 rs.getString("activity")), args.toArray());
     }
 
@@ -320,15 +326,15 @@ public class InvestigationExtendedRepository {
                 key.earliestCorrectAt(), key.latestCorrectAt(), evidenceIds));
     }
 
-    public long insertSolutionSubmission(long caseId, Long culpritId, String method, Long locationId,
+    public long insertSolutionSubmission(long caseId, long investigatorId, Long culpritId, String method, Long locationId,
                                          OffsetDateTime approximateAt, String explanation, boolean correct,
                                          String feedback) {
         Long id = jdbcTemplate.queryForObject("""
-                INSERT INTO solution_submission(case_id, suspected_culprit_id, method, location_id,
+                INSERT INTO solution_submission(case_id, investigator_id, suspected_culprit_id, method, location_id,
                                                 approximate_at, explanation, is_correct, feedback)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING submission_id
-                """, Long.class, caseId, culpritId, method, locationId, approximateAt,
+                """, Long.class, caseId, investigatorId, culpritId, method, locationId, approximateAt,
                 explanation, correct, feedback);
         if (id == null) throw new IllegalStateException("The solution submission did not return an ID.");
         return id;
@@ -431,7 +437,7 @@ public class InvestigationExtendedRepository {
     private static CctvRecordDto mapCctv(ResultSet rs) throws SQLException {
         return new CctvRecordDto(rs.getLong("observation_id"), rs.getString("camera_code"),
                 nullableLong(rs, "person_id"), rs.getString("person"), rs.getLong("location_id"),
-                rs.getString("location"), rs.getObject("observed_at", OffsetDateTime.class),
+                rs.getString("location"), rs.getString("address"), rs.getObject("observed_at", OffsetDateTime.class),
                 rs.getString("activity"), rs.getBigDecimal("confidence"), rs.getString("case_code"),
                 rs.getString("case_title"));
     }

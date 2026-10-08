@@ -4,6 +4,7 @@ import edu.casetrace.api.dto.CaseDetailsDto;
 import edu.casetrace.api.dto.CaseSummaryDto;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -36,7 +37,7 @@ public class CaseRepository {
 
     public Optional<CaseDetailsDto> findDetailsById(long caseId) {
         String sql = """
-                SELECT c.case_id, c.case_code, c.title, c.description, c.incident_at,
+                SELECT c.case_id, c.case_code, c.case_type, c.title, c.description, c.incident_at,
                        l.name AS incident_location, l.address AS incident_address,
                        c.status, c.difficulty
                 FROM case_file c
@@ -47,10 +48,38 @@ public class CaseRepository {
                 .stream().findFirst();
     }
 
+    public boolean isOwnedBy(long caseId, long investigatorId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM case_file WHERE case_id = ? AND created_by_investigator_id = ?)",
+                Boolean.class, caseId, investigatorId));
+    }
+
     public boolean existsById(long caseId) {
         Boolean exists = jdbcTemplate.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM case_file WHERE case_id = ?)", Boolean.class, caseId);
         return Boolean.TRUE.equals(exists);
+    }
+
+    @Transactional
+    public long create(String title, String description, java.time.OffsetDateTime incidentAt,
+                       String locationName, String address, String caseType, String difficulty,
+                       long investigatorId) {
+        Long locationId = jdbcTemplate.queryForObject("""
+                INSERT INTO location(name, address, location_type) VALUES (?, ?, 'OTHER')
+                ON CONFLICT (name, address) DO UPDATE SET name = EXCLUDED.name
+                RETURNING location_id
+                """, Long.class, locationName, address);
+        Long caseId = jdbcTemplate.queryForObject(
+                "SELECT nextval(pg_get_serial_sequence('case_file', 'case_id'))", Long.class);
+        if (locationId == null || caseId == null) throw new IllegalStateException("Case creation did not return generated identifiers.");
+        String code = String.format(java.util.Locale.ROOT, "CT-%04d", caseId);
+        jdbcTemplate.update("""
+                INSERT INTO case_file(case_id, case_code, title, description, incident_at, location_id,
+                                      status, difficulty, case_type, created_by_investigator_id)
+                VALUES (?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)
+                """, caseId, code, title, description, incidentAt, locationId,
+                difficulty == null ? "MEDIUM" : difficulty, caseType, investigatorId);
+        return caseId;
     }
 
     private CaseSummaryDto mapSummary(ResultSet rs, int rowNum) throws SQLException {
@@ -63,9 +92,9 @@ public class CaseRepository {
 
     private CaseDetailsDto mapDetails(ResultSet rs) throws SQLException {
         return new CaseDetailsDto(
-                rs.getLong("case_id"), rs.getString("case_code"), rs.getString("title"),
+                rs.getLong("case_id"), rs.getString("case_code"), rs.getString("case_type"), rs.getString("title"),
                 rs.getString("description"), rs.getObject("incident_at", java.time.OffsetDateTime.class),
                 rs.getString("incident_location"), rs.getString("incident_address"),
-                rs.getString("status"), rs.getString("difficulty"));
+                rs.getString("status"), rs.getString("difficulty"), false);
     }
 }

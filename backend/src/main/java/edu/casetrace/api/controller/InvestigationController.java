@@ -16,6 +16,7 @@ import edu.casetrace.api.dto.VehicleLogDto;
 import edu.casetrace.api.dto.WitnessDto;
 import edu.casetrace.api.dto.WitnessStatementDto;
 import edu.casetrace.api.service.InvestigationService;
+import edu.casetrace.api.security.InvestigatorPrincipal;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Positive;
@@ -23,6 +24,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -136,7 +138,9 @@ public class InvestigationController {
     @PostMapping("/solve")
     public ResponseEntity<SolveCaseResponse> solve(
             @PathVariable @Positive long caseId,
-            @Valid @RequestBody SolveCaseRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(investigationService.solve(caseId, request));
+            @Valid @RequestBody SolveCaseRequest request,
+            @AuthenticationPrincipal InvestigatorPrincipal principal) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(investigationService.solve(caseId, request, principal.getInvestigatorId()));
     }
 }

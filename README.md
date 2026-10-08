@@ -22,6 +22,8 @@ See [`docs/architecture.md`](docs/architecture.md) for the architecture, ER stru
 
 See [`backend/README.md`](backend/README.md) for backend requirements, database connection settings, and API endpoints.
 
+For existing databases that already applied migrations 004 and 005, run [`database/006_case_management_status.sql`](database/006_case_management_status.sql) once before using case editing. Investigator-created cases support owner-only updates, archive, safe deletion, and adding the existing relational investigation records; see the backend guide for the API contract.
+
 The backend configuration uses `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD`; credentials are not stored in source. See the backend guide for Windows setup, database checks, build, startup, and API verification commands.
 
 ## Technology stack
@@ -33,4 +35,8 @@ The backend configuration uses `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, a
 
 ## Frontend
 
-The React/Vite interface is in [`frontend/`](frontend/). It reads real case records from the Spring Boot API and defaults to `http://localhost:8082`. See [`frontend/README.md`](frontend/README.md) for install, configuration, build, and startup steps. The API URL can be changed with `VITE_API_BASE_URL`; no database credentials are used in the browser.
+The React/Vite interface is in [`frontend/`](frontend/). It reads real case records from the Spring Boot API and defaults to `http://localhost:8083`. See [`frontend/README.md`](frontend/README.md) for install, configuration, build, and startup steps. The API URL can be changed with `VITE_API_BASE_URL`; no database credentials are used in the browser.
+
+## Investigator accounts
+
+Registration, login, logout, and the investigator dashboard use the backend's PostgreSQL-backed session authentication. Before using them, apply the additive migration in [`database/004_authentication.sql`](database/004_authentication.sql) to the existing `casetrace` database. Do not rerun the original schema or seed scripts on an existing database. See the backend and frontend guides for setup and API details. Passwords are BCrypt-hashed; the browser keeps only an HttpOnly session cookie and a CSRF token, never a database credential or password hash.

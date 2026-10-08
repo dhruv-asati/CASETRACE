@@ -489,10 +489,82 @@ For the solve flow, submit a real investigator conclusion and confirm it creates
 - PostgreSQL 16.15 is installed and its Windows service is running. The `casetrace` database already contained the CASETRACE schema and seed records, so it was inspected and preserved instead of rerunning the non-idempotent setup scripts over existing data.
 - To verify fresh initialization without changing `casetrace`, `001_schema.sql` and then `002_seed.sql` were executed successfully in a temporary validation database, which was removed afterward. The scripts created 19 tables, 36 foreign keys, 2 views, 1 function, and 1 trigger. The seed created all three cases and linked participants, evidence, CCTV, access, phone, witness, vehicle, and event records.
 - The existing `casetrace` database has 3 cases, 11 suspect assignments, 9 evidence items, 9 CCTV observations, 7 access events, 3 phone records, 3 witness statements, and 3 case events. All SELECT examples in `003_investigation_queries.sql` ran successfully for case 1 and returned timeline, presence, call, contradiction, evidence-link, and witness results.
-- Maven 3.9.16 compiled the backend successfully with Java 26.0.1 targeting the configured Java 21 release. No test sources currently exist under `backend/src/test`. The running server holds the original JAR open, so a temporary Maven build file set an alternate artifact name. Maven's Spring Boot repackage goal then created `target/casetrace-api-validated.jar`; its manifest was verified to use `JarLauncher` and `CaseTraceApiApplication` as the start class.
+- Maven 3.9.16 compiled the backend successfully with Java 26.0.1 targeting the configured Java 21 release. The authentication service tests cover registration, identity edits, email uniqueness, and password-change checks.
 - The backend was started outside Codex on port 8081 against the real `casetrace` database. The 15 public GET routes (case list/detail and every investigation route) returned HTTP 200; empty search and valid CCTV filters also returned 200. Public GET responses were checked for solution-key fields and none were present.
 - Invalid case IDs returned structured HTTP 404 `CASE_NOT_FOUND`. Invalid timestamps, reversed time ranges, malformed JSON, empty solve bodies, invalid suspect/evidence references, and invalid solve case IDs returned the expected HTTP 400/404 responses. A deliberately incorrect but otherwise valid solve submission returned HTTP 201 with `correct=false`; PostgreSQL stored its submission and one cited-evidence row, and the case stayed open.
 - Testing found that non-positive IDs and an overlong search keyword returned HTTP 500. The API exception handler now maps Jakarta `ConstraintViolationException` to structured HTTP 400 `INVALID_REQUEST`, and the updated class is packaged in the executable validation JAR. After that JAR was started on port 8082, all three affected requests were retested and returned HTTP 400 `INVALID_REQUEST`.
 - The complete set of 15 public GET routes was rerun on port 8082 and each returned HTTP 200, including case detail, all evidence-source routes, connections, contradictions, timeline, and investigation search. Invalid case 999 returned HTTP 404; invalid IDs, invalid ranges, overlong search, and empty search returned their expected statuses.
 - Solve endpoint checks on port 8082 passed: nonexistent case returned 404; suspect/evidence IDs outside the case, missing explanation, invalid non-positive suspect ID, and malformed JSON returned 400. Persistence was verified earlier against the same `casetrace` database with a valid-format submission, which returned 201 and persisted the submission and citation rows.
-- **Verified runtime:** the validated executable JAR is running at `http://localhost:8082` (the original server on port 8081 may also remain running). To launch it from `backend` in PowerShell with the database environment variables configured above, use `java -jar .\target\casetrace-api-validated.jar --server.port=8082`. Maven `verify` passed; the project has no test sources, so there were no automated test cases to execute.
+- **Verified runtime at initial database-validation phase:** the validated executable JAR was running at `http://localhost:8082` (the original server on port 8081 may also have remained running). The project had no automated tests at that point; authentication service tests were added in a later phase.
+
+## Investigator authentication and dashboard
+
+The authentication phase adds PostgreSQL-backed investigator accounts and Spring Security sessions. It uses BCrypt password hashes and session cookies; password hashes and raw passwords are never included in API responses. Apply `database/004_authentication.sql` to the existing database before starting this version. This migration is additive and preserves old solve submissions by leaving their new investigator reference null. Do not rerun `001_schema.sql` or `002_seed.sql` on an existing installation.
+
+Set the normal database environment variables (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`) before starting the API. Set `FRONTEND_ORIGIN` to the exact frontend origin (default `http://localhost:5173`). For local HTTP development, `SESSION_COOKIE_SECURE` defaults to `false`; set it to `true` behind HTTPS. The authentication-enabled executable artifact is `target/casetrace-api-auth.jar`; launch it with `java -jar .\target\casetrace-api-auth.jar --server.port=8083`.
+
+Authentication endpoints are `GET /api/auth/csrf`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, and `GET /api/auth/me`. `PUT /api/auth/me` updates the signed-in investigator's full name and email; the authenticated session supplies the investigator ID, and usernames remain immutable. `POST /api/auth/password` requires current, new, and confirmation passwords. Passwords are checked and encoded with BCrypt; a successful change revokes the current session and clears its CSRF token. Duplicate email updates return `409 EMAIL_CONFLICT`, invalid password changes return structured `400` responses, and password hashes are never included in responses or logs. The existing investigator table and unique email index support this feature, so no new schema migration is needed.
+
+The CSRF endpoint provides the token required in `X-XSRF-TOKEN` for browser write requests, including profile `PUT`. All case APIs require an authenticated session. `GET /api/dashboard` returns the signed-in investigator's profile, persisted investigation counts, recent case activity, and solve history. `POST /api/cases/{caseId}/evidence/{evidenceId}/review` records an evidence review for that investigator; `GET /api/cases/{caseId}/evidence/reviews` returns that investigator's reviewed evidence IDs for the case. Solve submissions retain their investigator ID where submitted in an authenticated session; historic rows remain unattributed.
+
+## Final polish build status (2026-10-07)
+
+- `GET /api/auth/csrf` returned HTTP 200 from the existing server on port 8083; unauthenticated `GET /api/auth/me` returned the expected HTTP 401. The existing process returned HTTP 403 for a cross-origin `PUT` preflight because the MVC CORS mapping omitted `PUT`; `WebConfig` now allows it. POST registration and invalid-login probes timed out without a response on that existing process.
+- The updated source was packaged as the executable `target/casetrace-api-profile-20261007.jar`, including the Spring Boot launcher, authentication/profile/dashboard classes, and the corrected CORS mapping. The existing process still holds port 8083, so this artifact has not been started there yet. A start attempt on an alternate port from the managed environment failed during Tomcat startup with `Unable to establish loopback connection` under Java 26.
+- The installed JDK is 26 while the project targets Java 21. `mvn test` fails during test compilation with a JDK ZipFS `AccessDeniedException` while reading a cached Spring Boot JAR. The executable artifact was packaged with test compilation skipped; the service tests were not run. Use a Java 21 JDK to run the normal test lifecycle.
+- No schema or case data was changed in this phase. No database credentials are stored in the frontend or source files.
+
+For an existing local database, connect with `psql -h localhost -U postgres -d casetrace` and run `\i 'C:/path/to/CASETRACE/database/004_authentication.sql'` at the psql prompt. Enter the database password only at psql's prompt. Verify with `\dt investigator*` and `\d solution_submission`. Never put the password in the migration or source control.
+
+### Authenticated case creation
+
+For a database that already has the authentication migration, apply `database/005_case_creation.sql` after `004_authentication.sql`:
+
+```powershell
+psql -h localhost -p 5432 -U casetrace_app -d casetrace -v ON_ERROR_STOP=1 -f ..\database\005_case_creation.sql
+```
+
+Apply the case-management status constraint once after migration 005:
+
+```powershell
+psql -h localhost -p 5432 -U casetrace_app -d casetrace -v ON_ERROR_STOP=1 -f ..\database\006_case_management_status.sql
+```
+
+This additive migration adds a case type and an optional creator foreign key; existing cases receive the `OTHER` type and remain unchanged otherwise. `POST /api/cases` requires an authenticated session and CSRF token. Its JSON fields are `title`, `caseType` (`THEFT`, `DISAPPEARANCE`, `SABOTAGE`, `FRAUD`, or `OTHER`), `incidentAt` (ISO-8601 offset date/time), `location`, optional `address`, `description`, and optional `difficulty` (`EASY`, `MEDIUM`, or `HARD`). The API derives the creator from the server session, saves the location and case in one transaction with initial status `OPEN`, and returns HTTP 201 with the generated case ID and case information. Example request body:
+
+```json
+{
+  "title": "The Archive Key",
+  "caseType": "THEFT",
+  "incidentAt": "2026-10-07T21:30:00+05:30",
+  "location": "Records Room",
+  "address": "East Wing",
+  "description": "A restricted key disappeared during the evening shift.",
+  "difficulty": "MEDIUM"
+}
+```
+
+### Investigator case management
+
+`GET /api/cases/{caseId}` includes an `editable` flag derived from the authenticated session. Only the investigator who created a case may edit, archive, or delete it. Seeded/system cases remain read-only. The server always derives the investigator ID from the session; no write request accepts an investigator ID.
+
+Migration `006_case_management_status.sql` allows `OPEN`, `UNDER REVIEW`, `CLOSED`, and `ARCHIVED`. It only changes the status constraint and preserves existing rows.
+
+| Method | URL | Purpose |
+|---|---|---|
+| PUT | `/api/cases/{caseId}` | Edit case title, type, time, location, description, difficulty, and status |
+| PATCH | `/api/cases/{caseId}/status` | Change an allowed status, including archive |
+| DELETE | `/api/cases/{caseId}` | Transactionally delete an owned case and case-specific records |
+| POST | `/api/cases/{caseId}/people` | Add a suspect, witness, staff, victim, or other person |
+| POST | `/api/cases/{caseId}/evidence` | Add evidence with an optional participant relationship |
+| POST | `/api/cases/{caseId}/cctv` | Add a camera observation |
+| POST | `/api/cases/{caseId}/access-logs` | Add an access event |
+| POST | `/api/cases/{caseId}/phone-records` | Add a call between two case participants |
+| POST | `/api/cases/{caseId}/witness-statements` | Add a statement and optionally a claimed alibi interval |
+| POST | `/api/cases/{caseId}/vehicles` | Add a vehicle owned by a case participant |
+| POST | `/api/cases/{caseId}/vehicle-logs` | Add a vehicle movement |
+| POST | `/api/cases/{caseId}/timeline` | Add a case event |
+
+All write APIs use existing schema tables, validation, session authentication, and CSRF protection. The new data appears through the existing investigation read, search, timeline, and connections APIs. Alibi claims are optional on witness statements and feed the existing contradiction view. New cases do not receive a solution key; the solve endpoint retains its existing response when no key is configured.
+
+Case deletion removes case-specific relationships and records in foreign-key order. People still attached to another case and shared locations are preserved; unlinked participant rows created solely for the deleted case are cleaned up. Seeded cases have no creator attribution and cannot be deleted through these APIs.

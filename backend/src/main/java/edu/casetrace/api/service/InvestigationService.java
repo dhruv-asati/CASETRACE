@@ -121,7 +121,7 @@ public class InvestigationService {
     }
 
     @Transactional
-    public SolveCaseResponse solve(long caseId, SolveCaseRequest request) {
+    public SolveCaseResponse solve(long caseId, SolveCaseRequest request, long investigatorId) {
         caseService.requireCase(caseId);
         if (request.suspectedCulpritId() != null
                 && !extendedRepository.isParticipant(caseId, request.suspectedCulpritId())) {
@@ -158,7 +158,7 @@ public class InvestigationService {
                 : "Review your conclusion. " + coreMatches + " of 4 solution elements match; "
                     + evidenceMatched + " supporting evidence item(s) match the case record.";
 
-        long submissionId = extendedRepository.insertSolutionSubmission(caseId, request.suspectedCulpritId(),
+        long submissionId = extendedRepository.insertSolutionSubmission(caseId, investigatorId, request.suspectedCulpritId(),
                 request.method() == null ? "" : request.method().trim(), request.locationId(),
                 request.approximateAt(), request.explanation().trim(), correct, feedback);
         extendedRepository.insertSubmissionEvidence(submissionId, caseId, submittedEvidence);

@@ -10,6 +10,7 @@ public record VehicleLogDto(
         String owner,
         long locationId,
         String location,
+        String address,
         OffsetDateTime occurredAt,
         String activity
 ) {}
