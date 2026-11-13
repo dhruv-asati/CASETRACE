@@ -15,6 +15,7 @@ import edu.casetrace.api.dto.VehicleDto;
 import edu.casetrace.api.dto.VehicleLogDto;
 import edu.casetrace.api.dto.WitnessDto;
 import edu.casetrace.api.dto.WitnessStatementDto;
+import edu.casetrace.api.dto.TheoryHistoryDto;
 import edu.casetrace.api.service.InvestigationService;
 import edu.casetrace.api.security.InvestigatorPrincipal;
 import jakarta.validation.Valid;
@@ -133,6 +134,13 @@ public class InvestigationController {
     @GetMapping("/connections")
     public List<ConnectionDto> getConnections(@PathVariable @Positive long caseId) {
         return investigationService.getConnections(caseId);
+    }
+
+    @GetMapping("/theory-history")
+    public List<TheoryHistoryDto> getTheoryHistory(
+            @PathVariable @Positive long caseId,
+            @AuthenticationPrincipal InvestigatorPrincipal principal) {
+        return investigationService.getTheoryHistory(caseId, principal.getInvestigatorId());
     }
 
     @PostMapping("/solve")

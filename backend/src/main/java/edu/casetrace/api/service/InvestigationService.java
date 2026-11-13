@@ -15,6 +15,7 @@ import edu.casetrace.api.dto.VehicleDto;
 import edu.casetrace.api.dto.VehicleLogDto;
 import edu.casetrace.api.dto.WitnessDto;
 import edu.casetrace.api.dto.WitnessStatementDto;
+import edu.casetrace.api.dto.TheoryHistoryDto;
 import edu.casetrace.api.exception.CaseNotSolvableException;
 import edu.casetrace.api.exception.InvalidInvestigationRequestException;
 import edu.casetrace.api.repository.CaseSolutionKey;
@@ -117,6 +118,11 @@ public class InvestigationService {
     public List<ConnectionDto> getConnections(long caseId) {
         caseService.requireCase(caseId);
         return extendedRepository.findConnections(caseId);
+    }
+
+    public List<TheoryHistoryDto> getTheoryHistory(long caseId, long investigatorId) {
+        caseService.requireCase(caseId);
+        return extendedRepository.findTheoryHistory(caseId, investigatorId);
     }
 
     @Transactional

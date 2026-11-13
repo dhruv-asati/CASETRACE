@@ -9,6 +9,8 @@ import edu.casetrace.api.dto.VehicleDto;
 import edu.casetrace.api.dto.VehicleLogDto;
 import edu.casetrace.api.dto.WitnessDto;
 import edu.casetrace.api.dto.WitnessStatementDto;
+import edu.casetrace.api.dto.TheoryCitationDto;
+import edu.casetrace.api.dto.TheoryHistoryDto;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -18,8 +20,10 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.LinkedHashMap;
 
 @Repository
 public class InvestigationExtendedRepository {
@@ -325,6 +329,56 @@ public class InvestigationExtendedRepository {
         return Optional.of(new CaseSolutionKey(key.culpritId(), key.method(), key.locationId(),
                 key.earliestCorrectAt(), key.latestCorrectAt(), evidenceIds));
     }
+
+    public List<TheoryHistoryDto> findTheoryHistory(long caseId, long investigatorId) {
+        String sql = """
+                SELECT s.submission_id, s.submitted_at, s.suspected_culprit_id,
+                       suspect.full_name AS suspected_culprit, s.method, s.location_id,
+                       l.name AS location, s.approximate_at, s.explanation, s.is_correct, s.feedback
+                FROM solution_submission s
+                LEFT JOIN person suspect ON suspect.person_id = s.suspected_culprit_id
+                LEFT JOIN location l ON l.location_id = s.location_id
+                WHERE s.case_id = ? AND s.investigator_id = ?
+                ORDER BY s.submitted_at DESC, s.submission_id DESC
+                """;
+        List<HistoryRow> submissions = jdbcTemplate.query(sql, (rs, rowNum) -> new HistoryRow(
+                rs.getLong("submission_id"), rs.getObject("submitted_at", OffsetDateTime.class),
+                nullableLong(rs, "suspected_culprit_id"), rs.getString("suspected_culprit"),
+                rs.getString("method"), nullableLong(rs, "location_id"), rs.getString("location"),
+                rs.getObject("approximate_at", OffsetDateTime.class), rs.getString("explanation"),
+                rs.getBoolean("is_correct"), rs.getString("feedback")), caseId, investigatorId);
+        if (submissions.isEmpty()) return List.of();
+
+        String placeholders = String.join(",", java.util.Collections.nCopies(submissions.size(), "?"));
+        List<Object> args = new ArrayList<>(submissions.size() + 1);
+        args.add(caseId);
+        submissions.forEach(row -> args.add(row.submissionId()));
+        String citationSql = """
+                SELECT se.submission_id, e.evidence_id, e.evidence_code, e.evidence_type, e.description
+                FROM submission_evidence se
+                JOIN evidence e ON e.case_id = se.case_id AND e.evidence_id = se.evidence_id
+                WHERE se.case_id = ? AND se.submission_id IN (
+                """ + placeholders + ") ORDER BY se.submission_id, e.evidence_id";
+        Map<Long, List<TheoryCitationDto>> citationsBySubmission = new LinkedHashMap<>();
+        jdbcTemplate.query(citationSql, (rs, rowNum) -> {
+            citationsBySubmission.computeIfAbsent(rs.getLong("submission_id"), ignored -> new ArrayList<>())
+                    .add(new TheoryCitationDto(rs.getLong("evidence_id"), rs.getString("evidence_code"),
+                            rs.getString("evidence_type"), rs.getString("description")));
+            return null;
+        }, args.toArray());
+
+        return submissions.stream().map(row -> {
+            List<TheoryCitationDto> citations = List.copyOf(
+                    citationsBySubmission.getOrDefault(row.submissionId(), List.of()));
+            return new TheoryHistoryDto(row.submissionId(), row.submittedAt(), row.suspectedCulpritId(),
+                    row.suspectedCulprit(), row.method(), row.locationId(), row.location(), row.approximateAt(),
+                    row.explanation(), row.correct(), row.feedback(), citations.size(), citations);
+        }).toList();
+    }
+
+    record HistoryRow(long submissionId, OffsetDateTime submittedAt, Long suspectedCulpritId,
+                      String suspectedCulprit, String method, Long locationId, String location,
+                      OffsetDateTime approximateAt, String explanation, boolean correct, String feedback) {}
 
     public long insertSolutionSubmission(long caseId, long investigatorId, Long culpritId, String method, Long locationId,
                                          OffsetDateTime approximateAt, String explanation, boolean correct,
