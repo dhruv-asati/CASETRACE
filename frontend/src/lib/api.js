@@ -88,6 +88,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(body),
   }),
+  getTheoryHistory: (caseId) => request(`/api/cases/${caseId}/theory-history`),
 }
 
 export const authApi = {

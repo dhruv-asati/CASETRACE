@@ -2224,3 +2224,35 @@ html:has(body.landing-v4-active){width:auto;min-width:0}body.landing-v4-active{w
 .case-ref{flex-wrap:wrap}
 .case-ref>.tag{margin-left:auto}
 @media(max-width:560px){.comparison-grid>div:not(.comparison-mark){min-height:62px;padding:9px 10px}}
+
+/* Investigator-scoped submitted theory history in the case overview. */
+.theory-history-panel{padding:clamp(18px,2.4vw,28px);border-color:#4a4131;background:linear-gradient(135deg,#151714 0%,#101210 72%);box-shadow:inset 0 1px #b99a6d18}
+.theory-history-panel .section-heading{margin-bottom:18px}
+.theory-history-list{display:grid;gap:13px}
+.theory-history-entry{border:1px solid #373a34;background:#0e100f}
+.theory-history-latest{border-color:#88704b;box-shadow:inset 0 1px #c0a27330}
+.theory-history-entry>summary{display:flex;align-items:center;gap:14px;min-height:68px;padding:12px 15px;cursor:pointer;list-style:none}
+.theory-history-entry>summary::-webkit-details-marker{display:none}
+.theory-history-index{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border:1px solid #a58a5d;color:#d1b77c;font:11px var(--ct-mono)}
+.theory-history-summary{display:grid;flex:1;gap:5px;min-width:0}
+.theory-history-summary strong{color:#eee8da;font-size:13px}
+.theory-history-summary small{color:#a9a497;font:9px var(--ct-mono);letter-spacing:.04em}
+.theory-history-chevron{flex:0 0 auto;color:#bba16f;transition:transform .2s ease}
+.theory-history-entry[open] .theory-history-chevron{transform:rotate(90deg)}
+.theory-history-body{display:grid;gap:15px;padding:0 16px 18px 67px}
+.theory-history-result{padding:13px 15px;border-left:2px solid #b99a6d;background:#171815}
+.theory-history-result p{margin:8px 0 0;color:#ddd5c4;font-size:12px;line-height:1.65}
+.theory-history-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.theory-history-fields>div{display:grid;gap:5px;padding:10px 12px;border:1px solid #30332e;background:#121412;min-width:0}
+.theory-history-fields span,.theory-history-explanation>span,.theory-history-citations>span{color:#b9a16f;font:8px var(--ct-mono);letter-spacing:.09em}
+.theory-history-fields strong{color:#e5dfd2;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.theory-history-explanation p{margin:8px 0 0;color:#d5d0c5;font-size:12px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
+.theory-history-citations>span{display:flex;align-items:center;gap:8px}
+.theory-history-citations>span b{color:#ece3d2;font:10px var(--ct-mono)}
+.theory-history-citations ul{display:grid;gap:7px;margin:9px 0 0;padding:0;list-style:none}
+.theory-history-citations li{display:grid;gap:4px;padding:10px 12px;border:1px solid #30332e;background:#121412}
+.theory-history-citations li strong{color:#e5dfd2;font-size:10px;letter-spacing:.04em}
+.theory-history-citations li small,.theory-history-citations>p{margin:0;color:#aaa69a;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.theory-history-older{display:grid;gap:8px;padding-top:3px}
+.theory-history-period{padding:4px 0;color:#9d9688;font:8px var(--ct-mono);letter-spacing:.1em}
+@media(max-width:560px){.theory-history-panel{padding:15px}.theory-history-entry>summary{gap:9px;padding:10px}.theory-history-index{flex-basis:32px;width:32px;height:32px}.theory-history-summary strong{font-size:11px}.theory-history-summary small{font-size:8px}.theory-history-body{gap:12px;padding:0 10px 13px}.theory-history-fields{grid-template-columns:1fr}.theory-history-entry>summary>.tag{font-size:8px;padding:4px 5px}}

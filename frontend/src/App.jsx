@@ -32,12 +32,12 @@ const sections = [
   { id: 'solve', label: 'Submit theory', icon: BadgeCheck },
 ]
 
-const apiSections = ['suspects', 'evidence', 'cctv', 'access-logs', 'phone-records', 'witnesses', 'witness-statements', 'vehicles', 'vehicle-logs', 'timeline', 'timeline-records', 'participants', 'connections', 'contradictions']
+const apiSections = ['suspects', 'evidence', 'cctv', 'access-logs', 'phone-records', 'witnesses', 'witness-statements', 'vehicles', 'vehicle-logs', 'timeline', 'timeline-records', 'participants', 'connections', 'contradictions', 'theory-history']
 const emptyResource = () => ({ data: null, loading: true, error: null })
 
 function getRoute() {
   const path = window.location.pathname.replace(/\/+$/, '') || '/'
-  const match = path.match(/^\/case\/(\d+)$/)
+  const match = path.match(/^\/(?:case|cases)\/(\d+)$/)
   if (match) return { page: 'case', caseId: match[1] }
   if (path === '/login') return { page: 'login', returnTo: new URLSearchParams(window.location.search).get('returnTo'), registered: new URLSearchParams(window.location.search).get('registered') === '1', passwordChanged: new URLSearchParams(window.location.search).get('passwordChanged') === '1' }
   if (path === '/register') return { page: 'register' }
@@ -388,7 +388,7 @@ function CaseInvestigation({ caseId, navigate, user, onLogout }) {
   const loadCase = useCallback(() => { setCaseState({ data: null, loading: true, error: null }); api.getCase(caseId).then((data) => setCaseState({ data, loading: false, error: null })).catch((error) => setCaseState({ data: null, loading: false, error })) }, [caseId])
   const loadResource = useCallback((section, searchFilters) => {
     setResources((current) => ({ ...current, [section]: { ...current[section], loading: true, error: null } }))
-    const promise = section === 'investigate' ? api.search(caseId, searchFilters || {}) : api.getSection(caseId, section)
+    const promise = section === 'investigate' ? api.search(caseId, searchFilters || {}) : section === 'theory-history' ? api.getTheoryHistory(caseId) : api.getSection(caseId, section)
     promise.then((data) => setResources((current) => ({ ...current, [section]: { data, loading: false, error: null } }))).catch((error) => setResources((current) => ({ ...current, [section]: { data: null, loading: false, error } })))
   }, [caseId])
   useEffect(() => { loadCase(); apiSections.forEach((section) => loadResource(section)); loadResource('investigate', {}) }, [loadCase, loadResource])
@@ -646,7 +646,48 @@ function Overview({ caseId, caseFile, resources, refresh }) {
   return <div className="content-stack"><div className="overview-summary"><Panel className="incident-panel"><div className="incident-top"><Eyebrow icon={MapPin}>INCIDENT DETAILS</Eyebrow><Tag tone="amber">{caseFile?.difficulty || 'UNRATED'}</Tag></div><div className="incident-details"><div><span>INCIDENT TIME</span><strong>{formatDate(caseFile?.incidentAt)}</strong></div><div><span>LOCATION</span><strong>{caseFile?.incidentLocation || 'Not recorded'}</strong>{caseFile?.incidentAddress && <small>{caseFile.incidentAddress}</small>}</div></div><div className="case-ref"><span>CASE REFERENCE</span><strong>{caseFile?.caseCode} <span className="mono">/</span> {caseId}</strong><Tag tone="muted">{caseFile?.status || 'STATUS UNAVAILABLE'}</Tag></div></Panel><Panel className="stats-panel"><Eyebrow icon={InvestigatorMark}>CASE SNAPSHOT</Eyebrow><div className="stat-grid">{counts.map(([label, resource]) => <div className="stat-cell" key={label}><span>{label}</span>{resource.loading ? <strong className="stat-loading">···</strong> : resource.error ? <strong className="stat-error">—</strong> : <strong>{resource.data?.length ?? 0}</strong>}</div>)}</div></Panel></div>
     <div className="overview-columns"><Panel><SectionHeading kicker="PEOPLE IN THE FILE" title="Persons of interest" action={<span className="count-chip">{resources.participants.data?.length ?? '—'}</span>} /><ResourceState {...resources.participants} onRetry={() => refresh('participants')} emptyDetail="No people are currently attached to this file.">{<div className="mini-record-list">{resources.participants.data?.slice(0, 4).map((person) => <div className="mini-record" key={person.personId}><div className="avatar-mark">{person.name?.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div><div><strong>{person.name}</strong><span>{person.caseRole}{person.occupation ? ` · ${person.occupation}` : ''}</span></div><ArrowUpRight size={15} /></div>)}</div>}</ResourceState></Panel><Panel><SectionHeading kicker="RECENTLY CATALOGUED" title="Evidence locker" action={<span className="count-chip">{resources.evidence.data?.length ?? '—'}</span>} /><ResourceState {...resources.evidence} onRetry={() => refresh('evidence')} emptyDetail="No evidence has been catalogued for this case.">{<div className="mini-evidence-list">{resources.evidence.data?.slice(0, 3).map((item) => <div className="mini-evidence" key={item.evidenceId}><span className="evidence-index">{item.evidenceCode || `E-${item.evidenceId}`}</span><div><strong>{item.evidenceType}</strong><span>{item.description}</span></div><Tag tone={item.relevance === 'CRITICAL' ? 'red' : 'muted'}>{item.relevance || 'RECORDED'}</Tag></div>)}</div>}</ResourceState></Panel></div>
     <InvestigationBriefing caseFile={caseFile} resources={resources} />
+    <TheoryHistory resource={resources['theory-history']} retry={() => refresh('theory-history')} />
     <Panel className="brief-note"><div className="brief-icon"><Waves size={17} /></div><div><Eyebrow>INVESTIGATOR'S NOTE</Eyebrow><p>Follow each source and timestamp. A location mismatch is a lead for review; it does not establish intent or responsibility.</p></div><span className="note-watermark">{caseFile?.caseCode}</span></Panel></div>
+}
+
+function TheoryHistory({ resource, retry }) {
+  const submissions = resource.data || []
+  const latest = submissions[0]
+  const older = submissions.slice(1).reverse()
+  const renderSubmission = (submission, prominent = false) => {
+    if (!submission) return null
+    return <details className={`theory-history-entry ${prominent ? 'theory-history-latest' : ''}`} key={submission.submissionId} open={prominent || undefined}>
+      <summary>
+        <span className="theory-history-index">#{submission.submissionId}</span>
+        <span className="theory-history-summary">
+          <strong>{prominent ? 'Latest submission' : `Submission #${submission.submissionId}`}</strong>
+          <small>{formatDate(submission.submittedAt)} · {submission.citedRecordCount} cited {submission.citedRecordCount === 1 ? 'record' : 'records'}</small>
+        </span>
+        <Tag tone={submission.correct ? 'green' : 'amber'}>{submission.correct ? 'CORRECT' : 'INCORRECT'}</Tag>
+        <ChevronRight className="theory-history-chevron" size={17} />
+      </summary>
+      <div className="theory-history-body">
+        <div className="theory-history-result"><Eyebrow>{submission.correct ? 'EVALUATION / CONCLUSION ACCEPTED' : 'EVALUATION / THEORY RECORDED'}</Eyebrow><p>{submission.feedback}</p></div>
+        <div className="theory-history-fields">
+          {submission.suspectedCulprit && <div><span>PROPOSED PERSON</span><strong>{submission.suspectedCulprit}</strong></div>}
+          {submission.method && <div><span>METHOD</span><strong>{submission.method}</strong></div>}
+          {submission.location && <div><span>PROPOSED LOCATION</span><strong>{submission.location}</strong></div>}
+          {submission.approximateAt && <div><span>APPROXIMATE TIME</span><strong>{formatDate(submission.approximateAt)}</strong></div>}
+        </div>
+        <div className="theory-history-explanation"><span>SUBMITTED THEORY / EXPLANATION</span><p>{submission.explanation}</p></div>
+        <div className="theory-history-citations"><span>SUPPORTING RECORDS <b>{submission.citedRecordCount}</b></span>
+          {submission.citedRecords?.length ? <ul>{submission.citedRecords.map((record) => <li key={record.evidenceId}><strong>{record.evidenceCode} · {record.evidenceType}</strong><small>{record.description}</small></li>)}</ul> : <p>No supporting records were cited.</p>}
+        </div>
+      </div>
+    </details>
+  }
+
+  return <Panel className="theory-history-panel">
+    <SectionHeading kicker="PRIVATE INVESTIGATOR RECORD" title="Submitted theories" detail="Your submissions for this case, with the original explanation and the result recorded at submission time." action={!resource.loading && !resource.error && <span className="count-chip">{submissions.length} {submissions.length === 1 ? 'ENTRY' : 'ENTRIES'}</span>} />
+    <ResourceState {...resource} onRetry={retry} emptyTitle="No theories submitted yet" emptyDetail="When you submit a conclusion for this case, its recorded result and supporting records will appear here.">
+      <div className="theory-history-list">{renderSubmission(latest, true)}{older.length > 0 && <div className="theory-history-older"><span className="theory-history-period">EARLIER SUBMISSIONS · CHRONOLOGICAL</span>{older.map((submission) => renderSubmission(submission))}</div>}</div>
+    </ResourceState>
+  </Panel>
 }
 
 function InvestigationBriefing({ caseFile, resources }) {
@@ -885,6 +926,7 @@ function SolveCase({ context }) {
       if (selectedEvidence.length) body.supportingEvidenceIds = selectedEvidence
       const submitted = await api.submitTheory(caseId, body)
       setResult(submitted)
+      context.refresh('theory-history')
     } catch (caught) { setError(caught) } finally { submitLock.current = false; setSending(false) }
   }
   return <div className="content-stack"><SectionHeading kicker="INVESTIGATOR CONCLUSION" title="Submit your theory" detail="Bring together the person, method, place, time, and records that best explain this case." />{result ? <div className="solve-result-only"><TheoryResult result={result} /></div> : <><div className="solve-warning"><ShieldCheck size={17} /><p>Your conclusion is compared against the case record after submission. The private solution key is not shown here.</p></div><div className="solve-layout"><form className="solve-form" onSubmit={onSubmit}><Panel><div className="form-section-title"><span>01</span><div><h3>Your conclusion</h3><p>Choose the records and describe what you believe happened.</p></div></div><label className="form-label"><span>SUSPECTED PERSON</span><select value={culprit} onChange={(event) => setCulprit(event.target.value)}><option value="">Select a person (optional)</option>{suspects.map((person) => <option key={person.personId} value={person.personId}>{person.name}</option>)}</select></label><label className="form-label"><span>METHOD / THEORY</span><textarea rows="3" maxLength="2000" placeholder="How do you think the incident took place?" value={method} onChange={(event) => setMethod(event.target.value)} /></label><div className="form-two-col"><label className="form-label"><span>LOCATION</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="">Select a recorded location</option>{locationOptions.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select><small>Locations are drawn from case-linked CCTV and access records.</small></label><label className="form-label"><span>APPROXIMATE TIME</span><input name="approximateAt" type="datetime-local" value={time} onChange={(event) => setTime(event.target.value)} /></label></div><label className="form-label"><span>EXPLANATION <i>REQUIRED</i></span><textarea rows="5" maxLength="4000" required placeholder="Explain how the clues support your conclusion…" value={explanation} onChange={(event) => setExplanation(event.target.value)} /><small>{explanation.length}/4000 characters</small></label></Panel>
