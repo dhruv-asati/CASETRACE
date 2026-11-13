@@ -40,20 +40,6 @@ The database is the source of investigation records. React presents those record
 | Investigator activity | Dashboard case activity and evidence review state are stored for the authenticated investigator. |
 | Interface | Responsive dark investigation workspace, case briefing, search filters, timeline, profile badge, and a custom SVG favicon. |
 
-## Screenshots
-
-There are no application screenshots in the repository yet. The existing `frontend/public/favicon.svg` is the site icon, not a product screenshot. Add genuine captures under `docs/screenshots/` when available; suggested views are:
-
-1. Case archive with the available case cards.
-2. Case overview and investigation briefing.
-3. Evidence and people records.
-4. CCTV, access, witness, or vehicle records.
-5. Search results and type filters.
-6. Full timeline and potential contradictions.
-7. Connections and submitted-theory feedback.
-8. Investigator dashboard and profile.
-
-No screenshot paths are referenced until those images exist.
 
 ## Technology stack
 
