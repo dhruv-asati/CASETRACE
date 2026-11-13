@@ -128,11 +128,25 @@ public class InvestigationService {
     @Transactional
     public SolveCaseResponse solve(long caseId, SolveCaseRequest request, long investigatorId) {
         caseService.requireCase(caseId);
-        if (request.suspectedCulpritId() != null
-                && !extendedRepository.isParticipant(caseId, request.suspectedCulpritId())) {
+        if (request.suspectedCulpritId() == null) {
+            throw new InvalidInvestigationRequestException("Select a suspected person before submitting your theory.");
+        }
+        if (request.method() == null || request.method().isBlank()) {
+            throw new InvalidInvestigationRequestException("Enter a method or theory before submitting.");
+        }
+        if (request.locationId() == null) {
+            throw new InvalidInvestigationRequestException("Select a location before submitting your theory.");
+        }
+        if (request.explanation() == null || request.explanation().isBlank()) {
+            throw new InvalidInvestigationRequestException("Add an explanation before submitting your theory.");
+        }
+        if (request.supportingEvidenceIds() == null || request.supportingEvidenceIds().isEmpty()) {
+            throw new InvalidInvestigationRequestException("Cite supporting evidence before submitting your theory.");
+        }
+        if (!extendedRepository.isParticipant(caseId, request.suspectedCulpritId())) {
             throw new InvalidInvestigationRequestException("The suspected culprit is not associated with this case.");
         }
-        if (request.locationId() != null && !extendedRepository.locationExists(request.locationId())) {
+        if (!extendedRepository.locationExists(request.locationId())) {
             throw new InvalidInvestigationRequestException("The selected location does not exist.");
         }
 
@@ -149,18 +163,20 @@ public class InvestigationService {
         boolean methodMatched = request.method() != null
                 && normalizeMethod(request.method()).equals(normalizeMethod(key.method()));
         boolean locationMatched = request.locationId() != null && request.locationId() == key.locationId();
-        boolean timeMatched = request.approximateAt() != null
-                && !request.approximateAt().isBefore(key.earliestCorrectAt())
-                && !request.approximateAt().isAfter(key.latestCorrectAt());
+        Boolean timeMatched = request.approximateAt() == null ? null
+                : !request.approximateAt().isBefore(key.earliestCorrectAt())
+                    && !request.approximateAt().isAfter(key.latestCorrectAt());
         int evidenceMatched = (int) submittedEvidence.stream().filter(key.evidenceIds()::contains).count();
         boolean allRequiredEvidenceSubmitted = submittedEvidence.containsAll(key.evidenceIds());
-        boolean correct = culpritMatched && methodMatched && locationMatched && timeMatched
+        boolean correct = culpritMatched && methodMatched && locationMatched
+                && (timeMatched == null || timeMatched)
                 && allRequiredEvidenceSubmitted;
         int coreMatches = (culpritMatched ? 1 : 0) + (methodMatched ? 1 : 0)
-                + (locationMatched ? 1 : 0) + (timeMatched ? 1 : 0);
+                + (locationMatched ? 1 : 0) + (Boolean.TRUE.equals(timeMatched) ? 1 : 0);
+        int evaluatedCoreElements = timeMatched == null ? 3 : 4;
         String feedback = correct
                 ? "Conclusion accepted. Your solution and supporting evidence match the case record."
-                : "Review your conclusion. " + coreMatches + " of 4 solution elements match; "
+                : "Review your conclusion. " + coreMatches + " of " + evaluatedCoreElements + " evaluated solution elements match; "
                     + evidenceMatched + " supporting evidence item(s) match the case record.";
 
         long submissionId = extendedRepository.insertSolutionSubmission(caseId, investigatorId, request.suspectedCulpritId(),

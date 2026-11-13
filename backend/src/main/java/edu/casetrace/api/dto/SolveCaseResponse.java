@@ -8,7 +8,7 @@ public record SolveCaseResponse(
         boolean culpritMatched,
         boolean methodMatched,
         boolean locationMatched,
-        boolean timeMatched,
+        Boolean timeMatched,
         int supportingEvidenceMatched,
         int supportingEvidenceRequired,
         OffsetDateTime submittedAt,
